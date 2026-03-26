@@ -8,135 +8,76 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
+      background: #f0f0f0;
       min-height: 100vh;
-      padding: 16px;
+      padding: 12px;
       color: #333;
     }
-    .container {
-      max-width: 480px;
-      margin: 0 auto;
-    }
-    h1 {
-      text-align: center;
-      font-size: 1.5rem;
-      color: #1a1a1a;
-      margin-bottom: 20px;
-      letter-spacing: 2px;
-    }
+    .container { max-width: 520px; margin: 0 auto; }
+    h1 { text-align: center; font-size: 1.4rem; margin-bottom: 16px; letter-spacing: 3px; color: #222; }
+    
     .upload-zone {
-      border: 2px dashed #ccc;
-      border-radius: 16px;
-      padding: 40px 20px;
+      border: 2px dashed #bbb;
+      border-radius: 14px;
+      padding: 36px 20px;
       text-align: center;
       background: #fff;
       cursor: pointer;
       transition: all 0.2s;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
-    .upload-zone:hover, .upload-zone.dragover {
-      border-color: #666;
-      background: #fafafa;
-    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #888; background: #fafafa; }
     .upload-zone input { display: none; }
-    .upload-icon { font-size: 48px; margin-bottom: 12px; }
-    .upload-text { color: #666; font-size: 0.95rem; }
+    .upload-icon { font-size: 44px; margin-bottom: 10px; }
+    .upload-text { color: #666; font-size: 0.9rem; line-height: 1.5; }
     .upload-text span { color: #007aff; font-weight: 500; }
     
-    .controls {
-      display: none;
-      background: #fff;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    .controls.show { display: block; }
-    .control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .control-row:last-child { margin-bottom: 0; }
-    .control-label {
-      font-size: 0.9rem;
-      color: #555;
-    }
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      width: 100%;
-    }
-    .btn-primary {
-      background: #007aff;
-      color: #fff;
-    }
-    .btn-primary:active { background: #0062cc; }
-    .btn-primary:disabled { background: #a0c4ff; cursor: not-allowed; }
-    .btn-secondary {
-      background: #e8f0fe;
-      color: #1a73e8;
-    }
-    .btn-secondary:active { background: #d0e1fd; }
-    
-    .preview {
-      background: #fff;
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      display: none;
-    }
-    .preview.show { display: block; }
-    .preview-title {
-      font-size: 0.85rem;
-      color: #888;
-      margin-bottom: 10px;
-    }
-    .preview canvas {
-      width: 100%;
-      border-radius: 8px;
-      border: 1px solid #eee;
-    }
-    
     .status {
-      text-align: center;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      display: none;
-      margin-bottom: 12px;
+      text-align: center; padding: 10px 14px; border-radius: 10px;
+      font-size: 0.88rem; display: none; margin-bottom: 12px;
     }
     .status.show { display: block; }
-    .status.processing { background: #fff3cd; color: #856404; }
-    .status.done { background: #d4edda; color: #155724; }
-    .status.error { background: #f8d7da; color: #721c24; }
+    .status.processing { background: #fff8e6; color: #8a6000; }
+    .status.done { background: #d4edda; color: #1e6e35; }
+    .status.error { background: #fde8e8; color: #8b2020; }
+    
+    .panel {
+      background: #fff; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .panel.show { display: block; }
+    .panel-title { font-size: 0.8rem; color: #999; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    canvas { width: 100%; border-radius: 8px; border: 1px solid #eee; display: block; }
+    
+    .btn {
+      padding: 11px 20px; border: none; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; width: 100%; margin-top: 8px;
+    }
+    .btn-primary { background: #007aff; color: #fff; }
+    .btn-primary:active { background: #0062cc; }
+    .btn-secondary { background: #f0f0f0; color: #444; }
+    .btn-secondary:active { background: #e0e0e0; }
     
     .tips {
-      background: #fff;
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 20px;
-      font-size: 0.85rem;
-      color: #666;
-      line-height: 1.6;
+      background: #fff; border-radius: 12px; padding: 14px;
+      font-size: 0.82rem; color: #777; line-height: 1.7;
     }
-    .tips strong { color: #333; }
+    .tips strong { color: #444; }
     
-    select {
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      background: #fff;
-      color: #333;
+    .preview-wrap { position: relative; }
+    #previewCanvas { cursor: crosshair; }
+    .preview-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      border-radius: 8px; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 0.75rem;
     }
+    
+    .loading-dots::after { content: ''; animation: dots 1.2s infinite; }
+    @keyframes dots { 0%{content:''} 33%{content:'.'} 66%{content:'..'} }
   </style>
 </head>
 <body>
@@ -146,200 +87,295 @@
     <div class="upload-zone" id="uploadZone">
       <div class="upload-icon">📄</div>
       <div class="upload-text">
-        點擊上傳或拖放圖片<br>
-        <span>支援 JPG、PNG、PDF</span>
+        點擊上傳或拖放試卷圖片<br>
+        <span>支援 JPG、PNG</span>
       </div>
-      <input type="file" id="fileInput" accept="image/*,.pdf">
+      <input type="file" id="fileInput" accept="image/*">
     </div>
     
     <div class="status" id="status"></div>
     
-    <div class="controls" id="controls">
-      <div class="control-row">
-        <span class="control-label">偵測模式</span>
-        <select id="mode">
-          <option value="auto">自動</option>
-          <option value=" handwriting">僅手寫</option>
-          <option value="bubble">僅填涂</option>
-        </select>
+    <div class="panel" id="resultPanel">
+      <div class="panel-title">自動偵測結果</div>
+      <div class="preview-wrap">
+        <canvas id="previewCanvas"></canvas>
+        <div class="preview-overlay" id="overlay"></div>
       </div>
-      <div class="control-row">
-        <span class="control-label">清除強度</span>
-        <select id="strength">
-          <option value="low">輕</option>
-          <option value="medium" selected>中</option>
-          <option value="high">強</option>
-        </select>
-      </div>
-      <button class="btn btn-secondary" id="retryBtn" style="margin-bottom:8px">重新處理</button>
-      <button class="btn btn-primary" id="downloadBtn">下載清除版</button>
-    </div>
-    
-    <div class="preview" id="preview">
-      <div class="preview-title">處理後預覽</div>
-      <canvas id="resultCanvas"></canvas>
+      <button class="btn btn-primary" id="downloadBtn">下載乾淨試卷</button>
     </div>
     
     <div class="tips">
-      <strong>使用方法：</strong><br>
-      1. 上傳做過的試卷圖片<br>
-      2. 系統自動偵測答案區域<br>
-      3. 點擊下載空白試卷
+      <strong>說明：</strong><br>
+      全自動偵測，不需要任何設定。上傳後系統會自動找出填寫的答案並清除，保留印刷內容。
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
     const $ = id => document.getElementById(id);
     const zone = $('uploadZone');
     const fileInput = $('fileInput');
-    const controls = $('controls');
     const status = $('status');
-    const preview = $('preview');
-    const resultCanvas = $('resultCanvas');
-    const resultCtx = resultCanvas.getContext('2d');
+    const resultPanel = $('resultPanel');
+    const previewCanvas = $('previewCanvas');
+    const overlay = $('overlay');
+    const ctx = previewCanvas.getContext('2d');
     
-    let originalImage = null;
-    let processedImage = null;
-    let worker = null;
+    let originalImg = null;
+    let processedDataURL = null;
     
     // Drag & drop
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-    zone.addEventListener('drop', e => {
-      e.preventDefault();
-      zone.classList.remove('dragover');
-      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-    });
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
     zone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
-    
-    $('retryBtn').addEventListener('click', processImage);
     $('downloadBtn').addEventListener('click', downloadResult);
     
-    async function handleFile(file) {
-      showStatus('正在載入...', 'processing');
-      
-      const img = new Image();
-      img.onload = async () => {
-        originalImage = img;
-        await processImage();
+    function handleFile(file) {
+      showStatus('圖片載入中...', 'processing');
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          originalImg = img;
+          processImage(img);
+        };
+        img.src = e.target.result;
       };
-      img.src = URL.createObjectURL(file);
+      reader.readAsDataURL(file);
     }
     
-    async function processImage() {
-      if (!originalImage) return;
+    async function processImage(img) {
+      showStatus('AI 分析中<span class="loading-dots"></span>', 'processing');
       
-      const mode = $('mode').value;
-      const strength = $('strength').value;
+      // Scale for performance
+      const maxW = 1400;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      const W = Math.round(img.width * scale);
+      const H = Math.round(img.height * scale);
       
-      showStatus('AI 偵測中...', 'processing');
+      // Draw original
+      previewCanvas.width = W;
+      previewCanvas.height = H;
+      ctx.drawImage(img, 0, 0, W, H);
       
-      // Resize for processing
-      const maxW = 1200;
-      const scale = originalImage.width > maxW ? maxW / originalImage.width : 1;
-      const w = Math.round(originalImage.width * scale);
-      const h = Math.round(originalImage.height * scale);
+      const original = ctx.getImageData(0, 0, W, H);
+      const data = original.data;
+      const W3 = W * 4;
       
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(originalImage, 0, 0, w, h);
-      
-      // Load Tesseract
-      if (!worker) {
-        worker = await Tesseract.createWorker('eng+chi_sim', 1, {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              showStatus(`AI 偵測中... ${Math.round(m.progress * 100)}%`, 'processing');
-            }
-          }
-        });
+      // Convert to grayscale (0=white, 255=black)
+      const gray = new Uint8Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        const p = i * 4;
+        gray[i] = Math.round(0.299 * data[p] + 0.587 * data[p+1] + 0.114 * data[p+2]);
       }
       
-      const { data } = await worker.recognize(canvas);
+      // Step 1: Adaptive background estimation
+      // Estimate paper background color using modal value in small blocks
+      const blockSize = 20;
+      const bgGridW = Math.ceil(W / blockSize);
+      const bgGridH = Math.ceil(H / blockSize);
+      const bgValues = new Array(bgGridW * bgGridH).fill(255);
       
-      // Create result image
-      resultCanvas.width = w;
-      resultCanvas.height = h;
-      resultCtx.drawImage(originalImage, 0, 0, w, h);
-      
-      const strengthMap = { low: 0.6, medium: 0.75, high: 0.9 };
-      const clearThreshold = strengthMap[strength];
-      
-      // Process text blocks
-      for (const block of data.blocks || []) {
-        for (const line of block.lines || []) {
-          for (const word of line.words || []) {
-            // Low confidence = handwriting
-            if (word.confidence < 75) {
-              const bbox = word.bbox;
-              const pad = 4;
-              eraseRegion(
-                resultCtx,
-                (bbox.x0 - pad) * scale,
-                (bbox.y0 - pad) * scale,
-                (bbox.x1 + pad) * scale,
-                (bbox.y1 + pad) * scale,
-                strength
-              );
+      for (let by = 0; by < bgGridH; by++) {
+        for (let bx = 0; bx < bgGridW; bx++) {
+          const blockPixels = [];
+          for (let dy = 0; dy < blockSize && (by * blockSize + dy) < H; dy++) {
+            for (let dx = 0; dx < blockSize && (bx * blockSize + dx) < W; dx++) {
+              const idx = (by * blockSize + dy) * W + (bx * blockSize + dx);
+              blockPixels.push(gray[idx]);
             }
           }
+          // Use 10th percentile as background (ignoring ink)
+          blockPixels.sort((a, b) => a - b);
+          bgValues[by * bgGridW + bx] = blockPixels[Math.floor(blockPixels.length * 0.1)] || 240;
         }
       }
       
-      // Detect bubble fills (darker filled circles)
-      if (mode === 'auto' || mode === 'bubble') {
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const data = imageData.data;
-        const visited = new Set();
+      // Step 2: Ink detection — pixels darker than local background
+      // Use 2-pass approach: first pass finds strongly dark pixels
+      const inkMask = new Uint8Array(W * H);
+      
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = y * W + x;
+          const bx = Math.floor(x / blockSize);
+          const by = Math.floor(y / blockSize);
+          const bg = bgValues[by * bgGridW + bx];
+          const diff = bg - gray[idx]; // How much darker than background
+          
+          // Ink pixel: significantly darker than background
+          // Handwritten answers are darker, but so are printed strokes
+          // We need to find ANSWER areas specifically
+          inkMask[idx] = diff > 40 ? 255 : 0;
+        }
+      }
+      
+      // Step 3: Connected component labeling (4-connected)
+      const labels = new Int32Array(W * H).fill(-1);
+      let numLabels = 0;
+      const pixelCount = new Array(10000).fill(0);
+      const minX = new Array(10000).fill(W);
+      const minY = new Array(10000).fill(H);
+      const maxX = new Array(10000).fill(0);
+      const maxY = new Array(10000).fill(0);
+      
+      function floodScan(startX, startY, label) {
+        const stack = [[startX, startY]];
+        let count = 0;
+        let lx = W, ly = H, hx = 0, hy = 0;
         
-        for (let y = 0; y < h; y += 3) {
-          for (let x = 0; x < w; x += 3) {
-            const idx = (y * w + x) * 4;
-            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-            
-            // Detect dark filled regions (bubble fills)
-            const brightness = (r + g + b) / 3;
-            if (brightness < 100) {
-              const key = `${Math.floor(x/15)},${Math.floor(y/15)}`;
-              if (!visited.has(key)) {
-                visited.add(key);
-                eraseRegion(resultCtx, x * scale, y * scale, (x+15) * scale, (y+15) * scale, strength);
-              }
+        while (stack.length) {
+          const [x, y] = stack.pop();
+          const idx = y * W + x;
+          if (x < 0 || x >= W || y < 0 || y >= H) continue;
+          if (labels[idx] >= 0 || !inkMask[idx]) continue;
+          
+          labels[idx] = label;
+          count++;
+          if (x < lx) lx = x;
+          if (y < ly) ly = y;
+          if (x > hx) hx = x;
+          if (y > hy) hy = y;
+          
+          stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+        }
+        
+        return { count, bounds: [lx, ly, hx, hy] };
+      }
+      
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = y * W + x;
+          if (inkMask[idx] && labels[idx] < 0) {
+            const { count, bounds: [lx, ly, hx, hy] } = floodScan(x, y, numLabels);
+            pixelCount[numLabels] = count;
+            minX[numLabels] = lx; minY[numLabels] = ly;
+            maxX[numLabels] = hx; maxY[numLabels] = hy;
+            numLabels++;
+          }
+        }
+      }
+      
+      // Step 4: Classify and erase answer regions
+      // Strategy: answers are in specific patterns:
+      // - Matching: single letters in boxes on the right side of rows
+      // - Rewrite: sentences on blank lines
+      // Both are characterized by: ink density + position relative to printed text
+      
+      // Compute density for each component
+      const density = new Float32Array(numLabels);
+      for (let i = 0; i < numLabels; i++) {
+        const area = (maxX[i] - minX[i] + 1) * (maxY[i] - minY[i] + 1);
+        density[i] = pixelCount[i] / area;
+      }
+      
+      // Average character width/height estimation
+      // Remove noise: very small components (specks)
+      // Keep: medium-large components with high density (actual handwriting)
+      const inkThreshold = 35; // Pixels darker than this = ink
+      
+      // Create erasure mask
+      const eraseMask = new Uint8Array(W * H).fill(0);
+      
+      for (let i = 0; i < numLabels; i++) {
+        const w = maxX[i] - minX[i] + 1;
+        const h = maxY[i] - minY[i] + 1;
+        const area = w * h;
+        
+        // Filter: skip very small (noise) or very large (full page marks)
+        if (pixelCount[i] < 15) continue;
+        if (area > W * H * 0.3) continue;
+        
+        // Skip very thin horizontal lines (printed rules)
+        if (h <= 3 && area > 200) continue;
+        
+        // Compute average darkness of this component
+        let totalDark = 0;
+        for (let py = minY[i]; py <= maxY[i]; py++) {
+          for (let px = minX[i]; px <= maxX[i]; px++) {
+            const idx = py * W + px;
+            if (labels[idx] === i) {
+              totalDark += bgValues[Math.floor(py/blockSize) * bgGridW + Math.floor(px/blockSize)] - gray[idx];
+            }
+          }
+        }
+        const avgDark = totalDark / pixelCount[i];
+        
+        // Skip light/printed elements
+        if (avgDark < 20) continue;
+        
+        // Density filter: handwriting is more "filled" than printed dots
+        // Printed text has gaps between strokes, handwriting is denser
+        const fillRatio = pixelCount[i] / area;
+        
+        // Handwritten answers: medium fill ratio (not dots, not full fill)
+        // But we want to catch them — so be permissive
+        if (fillRatio < 0.05) continue;
+        
+        // Mark for erasure
+        for (let py = minY[i]; py <= maxY[i]; py++) {
+          for (let px = minX[i]; px <= maxX[i]; px++) {
+            const idx = py * W + px;
+            if (labels[idx] === i) {
+              eraseMask[idx] = 1;
             }
           }
         }
       }
       
-      processedImage = resultCanvas.toDataURL('image/png');
+      // Step 5: Apply neighborhood expansion to catch ink edges
+      // Handwriting often has slightly lighter edges
+      const expandedMask = new Uint8Array(W * H);
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const idx = y * W + x;
+          if (eraseMask[idx]) {
+            expandedMask[idx] = 1;
+          } else if (eraseMask[idx-1] || eraseMask[idx+1] || eraseMask[idx-W] || eraseMask[idx+W]) {
+            // Adjacent to erasure region AND appears to be ink (dark pixel)
+            if (gray[idx] < 180) expandedMask[idx] = 1;
+          }
+        }
+      }
       
-      preview.classList.add('show');
-      controls.classList.add('show');
-      showStatus('完成！', 'done');
+      // Step 6: Apply erasure to canvas
+      // Create result by drawing white over erased areas
+      ctx.drawImage(img, 0, 0, W, H);
+      const result = ctx.getImageData(0, 0, W, H);
+      const rdata = result.data;
       
-      setTimeout(() => showStatus('', ''), 3000);
-    }
-    
-    function eraseRegion(ctx, x1, y1, x2, y2, strength) {
-      const intensity = strength === 'high' ? 255 : strength === 'medium' ? 248 : 240;
-      ctx.fillStyle = `rgb(${intensity},${intensity},${intensity})`;
-      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      for (let i = 0; i < W * H; i++) {
+        if (expandedMask[i]) {
+          const p = i * 4;
+          // Erase to near-white (match paper color)
+          rdata[p] = 252;
+          rdata[p+1] = 250;
+          rdata[p+2] = 246;
+          rdata[p+3] = 255;
+        }
+      }
+      
+      ctx.putImageData(result, 0, 0);
+      
+      processedDataURL = previewCanvas.toDataURL('image/png');
+      
+      resultPanel.classList.add('show');
+      overlay.innerHTML = '完成 ✓';
+      overlay.style.background = 'rgba(30,110,50,0.7)';
+      showStatus('已清除答案區域', 'done');
     }
     
     function downloadResult() {
-      if (!processedImage) return;
-      
-      const link = document.createElement('a');
-      link.download = 'cleaned_exam.png';
-      link.href = processedImage;
-      link.click();
+      if (!processedDataURL) return;
+      const a = document.createElement('a');
+      a.download = 'cleaned_exam.png';
+      a.href = processedDataURL;
+      a.click();
     }
     
     function showStatus(msg, type) {
-      status.textContent = msg;
+      status.innerHTML = msg;
       status.className = 'status' + (msg ? ` show ${type}` : '');
     }
   </script>
