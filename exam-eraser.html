@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>試卷橡皮擦</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 16px;
+      color: #333;
+    }
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+    }
+    .upload-zone {
+      border: 2px dashed #ccc;
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 16px;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: #666;
+      background: #fafafa;
+    }
+    .upload-zone input { display: none; }
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-text { color: #666; font-size: 0.95rem; }
+    .upload-text span { color: #007aff; font-weight: 500; }
+    
+    .controls {
+      display: none;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .controls.show { display: block; }
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .control-row:last-child { margin-bottom: 0; }
+    .control-label {
+      font-size: 0.9rem;
+      color: #555;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      width: 100%;
+    }
+    .btn-primary {
+      background: #007aff;
+      color: #fff;
+    }
+    .btn-primary:active { background: #0062cc; }
+    .btn-primary:disabled { background: #a0c4ff; cursor: not-allowed; }
+    .btn-secondary {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+    .btn-secondary:active { background: #d0e1fd; }
+    
+    .preview {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .preview.show { display: block; }
+    .preview-title {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .preview canvas {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+    
+    .status {
+      text-align: center;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      display: none;
+      margin-bottom: 12px;
+    }
+    .status.show { display: block; }
+    .status.processing { background: #fff3cd; color: #856404; }
+    .status.done { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+    
+    .tips {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #666;
+      line-height: 1.6;
+    }
+    .tips strong { color: #333; }
+    
+    select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: #fff;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>試卷橡皮擦</h1>
+    
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-text">
+        點擊上傳或拖放圖片<br>
+        <span>支援 JPG、PNG、PDF</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,.pdf">
+    </div>
+    
+    <div class="status" id="status"></div>
+    
+    <div class="controls" id="controls">
+      <div class="control-row">
+        <span class="control-label">偵測模式</span>
+        <select id="mode">
+          <option value="auto">自動</option>
+          <option value=" handwriting">僅手寫</option>
+          <option value="bubble">僅填涂</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <span class="control-label">清除強度</span>
+        <select id="strength">
+          <option value="low">輕</option>
+          <option value="medium" selected>中</option>
+          <option value="high">強</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" id="retryBtn" style="margin-bottom:8px">重新處理</button>
+      <button class="btn btn-primary" id="downloadBtn">下載清除版</button>
+    </div>
+    
+    <div class="preview" id="preview">
+      <div class="preview-title">處理後預覽</div>
+      <canvas id="resultCanvas"></canvas>
+    </div>
+    
+    <div class="tips">
+      <strong>使用方法：</strong><br>
+      1. 上傳做過的試卷圖片<br>
+      2. 系統自動偵測答案區域<br>
+      3. 點擊下載空白試卷
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const zone = $('uploadZone');
+    const fileInput = $('fileInput');
+    const controls = $('controls');
+    const status = $('status');
+    const preview = $('preview');
+    const resultCanvas = $('resultCanvas');
+    const resultCtx = resultCanvas.getContext('2d');
+    
+    let originalImage = null;
+    let processedImage = null;
+    let worker = null;
+    
+    // Drag & drop
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    zone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    
+    $('retryBtn').addEventListener('click', processImage);
+    $('downloadBtn').addEventListener('click', downloadResult);
+    
+    async function handleFile(file) {
+      showStatus('正在載入...', 'processing');
+      
+      const img = new Image();
+      img.onload = async () => {
+        originalImage = img;
+        await processImage();
+      };
+      img.src = URL.createObjectURL(file);
+    }
+    
+    async function processImage() {
+      if (!originalImage) return;
+      
+      const mode = $('mode').value;
+      const strength = $('strength').value;
+      
+      showStatus('AI 偵測中...', 'processing');
+      
+      // Resize for processing
+      const maxW = 1200;
+      const scale = originalImage.width > maxW ? maxW / originalImage.width : 1;
+      const w = Math.round(originalImage.width * scale);
+      const h = Math.round(originalImage.height * scale);
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(originalImage, 0, 0, w, h);
+      
+      // Load Tesseract
+      if (!worker) {
+        worker = await Tesseract.createWorker('eng+chi_sim', 1, {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              showStatus(`AI 偵測中... ${Math.round(m.progress * 100)}%`, 'processing');
+            }
+          }
+        });
+      }
+      
+      const { data } = await worker.recognize(canvas);
+      
+      // Create result image
+      resultCanvas.width = w;
+      resultCanvas.height = h;
+      resultCtx.drawImage(originalImage, 0, 0, w, h);
+      
+      const strengthMap = { low: 0.6, medium: 0.75, high: 0.9 };
+      const clearThreshold = strengthMap[strength];
+      
+      // Process text blocks
+      for (const block of data.blocks || []) {
+        for (const line of block.lines || []) {
+          for (const word of line.words || []) {
+            // Low confidence = handwriting
+            if (word.confidence < 75) {
+              const bbox = word.bbox;
+              const pad = 4;
+              eraseRegion(
+                resultCtx,
+                (bbox.x0 - pad) * scale,
+                (bbox.y0 - pad) * scale,
+                (bbox.x1 + pad) * scale,
+                (bbox.y1 + pad) * scale,
+                strength
+              );
+            }
+          }
+        }
+      }
+      
+      // Detect bubble fills (darker filled circles)
+      if (mode === 'auto' || mode === 'bubble') {
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+        const visited = new Set();
+        
+        for (let y = 0; y < h; y += 3) {
+          for (let x = 0; x < w; x += 3) {
+            const idx = (y * w + x) * 4;
+            const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+            
+            // Detect dark filled regions (bubble fills)
+            const brightness = (r + g + b) / 3;
+            if (brightness < 100) {
+              const key = `${Math.floor(x/15)},${Math.floor(y/15)}`;
+              if (!visited.has(key)) {
+                visited.add(key);
+                eraseRegion(resultCtx, x * scale, y * scale, (x+15) * scale, (y+15) * scale, strength);
+              }
+            }
+          }
+        }
+      }
+      
+      processedImage = resultCanvas.toDataURL('image/png');
+      
+      preview.classList.add('show');
+      controls.classList.add('show');
+      showStatus('完成！', 'done');
+      
+      setTimeout(() => showStatus('', ''), 3000);
+    }
+    
+    function eraseRegion(ctx, x1, y1, x2, y2, strength) {
+      const intensity = strength === 'high' ? 255 : strength === 'medium' ? 248 : 240;
+      ctx.fillStyle = `rgb(${intensity},${intensity},${intensity})`;
+      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+    }
+    
+    function downloadResult() {
+      if (!processedImage) return;
+      
+      const link = document.createElement('a');
+      link.download = 'cleaned_exam.png';
+      link.href = processedImage;
+      link.click();
+    }
+    
+    function showStatus(msg, type) {
+      status.textContent = msg;
+      status.className = 'status' + (msg ? ` show ${type}` : '');
+    }
+  </script>
+</body>
+</html>
