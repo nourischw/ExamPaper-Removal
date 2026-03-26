@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>試卷橡皮擦</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f0f0;
+      min-height: 100vh;
+      padding: 12px;
+      color: #333;
+    }
+    .container { max-width: 520px; margin: 0 auto; }
+    h1 { text-align: center; font-size: 1.4rem; margin-bottom: 14px; letter-spacing: 3px; }
+    
+    .upload-zone {
+      border: 2px dashed #bbb;
+      border-radius: 14px;
+      padding: 32px 20px;
+      text-align: center;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #888; background: #fafafa; }
+    .upload-zone input { display: none; }
+    .upload-icon { font-size: 42px; margin-bottom: 8px; }
+    .upload-text { color: #666; font-size: 0.9rem; line-height: 1.5; }
+    .upload-text span { color: #007aff; font-weight: 500; }
+    .upload-formats { font-size: 0.78rem; color: #aaa; margin-top: 6px; }
+    
+    .status {
+      text-align: center; padding: 10px 14px; border-radius: 10px;
+      font-size: 0.88rem; display: none; margin-bottom: 12px;
+    }
+    .status.show { display: block; }
+    .status.processing { background: #fff8e6; color: #8a6000; }
+    .status.done { background: #d4edda; color: #1e6e35; }
+    .status.error { background: #fde8e8; color: #8b2020; }
+    
+    .panel {
+      background: #fff; border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .panel.show { display: block; }
+    .panel-title { font-size: 0.78rem; color: #999; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    canvas { width: 100%; border-radius: 8px; border: 1px solid #eee; display: block; }
+    
+    .btn {
+      padding: 12px 20px; border: none; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; width: 100%; margin-top: 8px;
+    }
+    .btn-primary { background: #007aff; color: #fff; }
+    .btn-primary:active { background: #0062cc; }
+    .btn-secondary { background: #f0f0f0; color: #444; }
+    .btn-secondary:active { background: #e0e0e0; }
+    
+    .tips {
+      background: #fff; border-radius: 12px; padding: 14px;
+      font-size: 0.82rem; color: #777; line-height: 1.7;
+    }
+    .tips strong { color: #444; }
+    
+    .speed-tag {
+      display: inline-block;
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      margin-left: 6px;
+    }
+    
+    .loading-dots::after { content: ''; animation: dots 1.2s infinite; }
+    @keyframes dots { 0%{content:''} 33%{content:'.'} 66%{content:'..'} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>試卷橡皮擦 <span class="speed-tag">Server ✓</span></h1>
+    
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-text">
+        點擊上傳或拖放試卷<br>
+        <span>支援 JPG、PNG、PDF</span>
+      </div>
+      <div class="upload-formats">圖片或 PDF 都可以</div>
+      <input type="file" id="fileInput" accept="image/*,.pdf">
+    </div>
+    
+    <div class="status" id="status"></div>
+    
+    <div class="panel" id="resultPanel">
+      <div class="panel-title">處理結果</div>
+      <canvas id="resultCanvas"></canvas>
+      <button class="btn btn-primary" id="downloadBtn">下載乾淨試卷</button>
+    </div>
+    
+    <div class="tips">
+      <strong>說明：</strong><br>
+      全自動偵測作答區域，只清除答案不改變卷面結構。處理在雲端進行，速度更快。
+    </div>
+  </div>
+
+  <!-- PDF.js for PDF support -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    
+    const $ = id => document.getElementById(id);
+    const zone = $('uploadZone');
+    const fileInput = $('fileInput');
+    const status = $('status');
+    const resultPanel = $('resultPanel');
+    const resultCanvas = $('resultCanvas');
+    const ctx = resultCanvas.getContext('2d');
+    
+    let resultDataURL = null;
+    
+    // Drag & drop
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+    zone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    $('downloadBtn').addEventListener('click', downloadResult);
+    
+    async function handleFile(file) {
+      showStatus('準備上傳中...', 'processing');
+      
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        showStatus('PDF 轉圖片中...', 'processing');
+        const imageBuffer = await pdfToImage(file);
+        await uploadAndProcess(imageBuffer, file.name + '.png');
+      } else {
+        await uploadAndProcess(file, file.name);
+      }
+    }
+    
+    async function pdfToImage(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      // Process first page only for simplicity
+      const page = await pdf.getPage(1);
+      const scale = 2;
+      const viewport = page.getViewport({ scale });
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const renderCtx = canvas.getContext('2d');
+      
+      await page.render({ canvasContext: renderCtx, viewport }).promise;
+      
+      return await new Promise(resolve => {
+        canvas.toBlob(blob => {
+          blob.arrayBuffer().then(buf => resolve(buf));
+        }, 'image/png');
+      });
+    }
+    
+    async function uploadAndProcess(buffer, filename) {
+      showStatus('上傳並處理中<span class="loading-dots"></span>', 'processing');
+      
+      try {
+        const formData = new FormData();
+        const blob = new Blob([buffer], { type: 'image/png' });
+        formData.append('file', blob, filename);
+        
+        const response = await fetch('/api', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+        
+        const resultBuffer = await response.arrayBuffer();
+        resultDataURL = URL.createObjectURL(new Blob([resultBuffer], { type: 'image/png' }));
+        
+        // Display result
+        const img = new Image();
+        img.onload = () => {
+          resultCanvas.width = img.width;
+          resultCanvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          resultPanel.classList.add('show');
+          showStatus('完成 ✓', 'done');
+        };
+        img.src = resultDataURL;
+        
+      } catch (err) {
+        showStatus('錯誤: ' + err.message, 'error');
+      }
+    }
+    
+    function downloadResult() {
+      if (!resultDataURL) return;
+      const a = document.createElement('a');
+      a.download = 'cleaned_exam.png';
+      a.href = resultDataURL;
+      a.click();
+    }
+    
+    function showStatus(msg, type) {
+      status.innerHTML = msg;
+      status.className = 'status' + (msg ? ` show ${type}` : '');
+    }
+  </script>
+</body>
+</html>
