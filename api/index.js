@@ -1,70 +1,40 @@
 const sharp = require('sharp');
 
 module.exports = async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
   try {
-    let imageBuffer;
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const buffer = Buffer.concat(chunks);
     
     const contentType = req.headers['content-type'] || '';
+    const boundaryMatch = contentType.match(/boundary=(.+)/);
     
-    if (contentType.includes('application/json')) {
-      // JSON: { imageUrl: "..." }
-      const { imageUrl } = req.body;
-      if (!imageUrl) return res.status(400).json({ error: 'No imageUrl provided' });
-      
-      const response = await fetch(imageUrl);
-      if (!response.ok) throw new Error('Failed to fetch image');
-      imageBuffer = await response.buffer();
-    } else {
-      // Multipart form data
-      const chunks = [];
-      for await (const chunk of req) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      
-      // Simple multipart parser
-      const boundaryMatch = contentType.match(/boundary=(.+)/);
-      if (!boundaryMatch) {
-        return res.status(400).json({ error: 'No boundary found' });
-      }
+    let imageBuffer;
+    if (boundaryMatch) {
       const boundary = boundaryMatch[1];
-      
       const parts = buffer.toString('binary').split('--' + boundary);
-      let foundFile = false;
-      
       for (const part of parts) {
         if (!part.includes('filename=')) continue;
-        
         const headerEnd = part.indexOf('\r\n\r\n');
         if (headerEnd === -1) continue;
-        
         const contentStart = headerEnd + 4;
         const lastCrlf = part.lastIndexOf('\r\n');
-        const binaryContent = part.slice(contentStart, lastCrlf);
-        imageBuffer = Buffer.from(binaryContent, 'binary');
-        foundFile = true;
+        imageBuffer = Buffer.from(part.slice(contentStart, lastCrlf), 'binary');
         break;
       }
-      
-      if (!foundFile) {
-        return res.status(400).json({ error: 'No file uploaded' });
-      }
+    } else {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    // Process
+    if (!imageBuffer) return res.status(400).json({ error: 'No file data' });
+    
     const resultBuffer = await processExamPaper(imageBuffer);
     
     res.setHeader('Content-Type', 'image/png');
@@ -78,170 +48,220 @@ module.exports = async function handler(req, res) {
 };
 
 async function processExamPaper(inputBuffer) {
-  // Load and resize
-  let width, height;
-  const image = sharp(inputBuffer);
-  const metadata = await image.metadata();
+  const img = sharp(inputBuffer);
+  const meta = await img.metadata();
+  let width = meta.width;
+  let height = meta.height;
   
-  const maxDim = 2000;
-  if (metadata.width > maxDim || metadata.height > maxDim) {
-    const scale = maxDim / Math.max(metadata.width, metadata.height);
-    image.resize(Math.round(metadata.width * scale), Math.round(metadata.height * scale));
+  const maxDim = 1800;
+  if (width > maxDim || height > maxDim) {
+    const s = maxDim / Math.max(width, height);
+    img.resize(Math.round(width * s), Math.round(height * s));
+    const newMeta = await img.metadata();
+    width = newMeta.width;
+    height = newMeta.height;
   }
   
-  const { data: grayBuffer, info } = await image
-    .grayscale()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const { data: gray } = await img.grayscale().raw().toBuffer({ resolveWithObject: true });
   
-  width = info.width;
-  height = info.height;
-  const data = grayBuffer;
-  
-  // Step 1: Estimate background with sliding window
+  // Estimate paper background (brightest pixels in blocks)
   const bgMap = Buffer.alloc(width * height);
-  const blockSize = 15;
+  const blockSize = 20;
   
   for (let by = 0; by < Math.ceil(height / blockSize); by++) {
     for (let bx = 0; bx < Math.ceil(width / blockSize); bx++) {
-      const blockPixels = [];
-      const x0 = bx * blockSize;
-      const y0 = by * blockSize;
-      
-      for (let dy = 0; dy < blockSize && y0 + dy < height; dy++) {
-        for (let dx = 0; dx < blockSize && x0 + dx < width; dx++) {
-          const idx = (y0 + dy) * width + (x0 + dx);
-          blockPixels.push(data[idx]);
+      const pixels = [];
+      for (let dy = 0; dy < blockSize && by * blockSize + dy < height; dy++) {
+        for (let dx = 0; dx < blockSize && bx * blockSize + dx < width; dx++) {
+          pixels.push(gray[(by * blockSize + dy) * width + (bx * blockSize + dx)]);
         }
       }
-      blockPixels.sort((a, b) => a - b);
-      const bgValue = blockPixels[Math.floor(blockPixels.length * 0.1)] || 245;
-      
-      for (let dy = 0; dy < blockSize && y0 + dy < height; dy++) {
-        for (let dx = 0; dx < blockSize && x0 + dx < width; dx++) {
-          const idx = (y0 + dy) * width + (x0 + dx);
-          bgMap[idx] = bgValue;
+      pixels.sort((a, b) => a - b);
+      const bg = pixels[Math.floor(pixels.length * 0.05)] || 245;
+      for (let dy = 0; dy < blockSize && by * blockSize + dy < height; dy++) {
+        for (let dx = 0; dx < blockSize && bx * blockSize + dx < width; dx++) {
+          bgMap[(by * blockSize + dy) * width + (bx * blockSize + dx)] = bg;
         }
       }
     }
   }
   
-  // Step 2: Ink mask
+  // Create ink mask: pixels significantly darker than local background
   const inkMask = Buffer.alloc(width * height);
   for (let i = 0; i < width * height; i++) {
-    inkMask[i] = (bgMap[i] - data[i]) > 35 ? 1 : 0;
+    inkMask[i] = (bgMap[i] - gray[i]) > 40 ? 1 : 0;
   }
   
-  // Step 3: Connected components (4-connected)
+  // Connected components on ink mask (4-connected)
+  // inkMask[i] = 1 means this pixel is ink
   const labels = new Int32Array(width * height).fill(-1);
   let numLabels = 0;
   const comps = [];
   
-  for (let i = 0; i < width * height; i++) {
-    if (!inkMask[i] || labels[i] >= 0) continue;
-    
-    const stack = [i];
-    const pixels = [];
-    
-    while (stack.length) {
-      const idx = stack.pop();
-      if (idx < 0 || idx >= width * height) continue;
-      if (labels[idx] >= 0 || !inkMask[idx]) continue;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (!inkMask[idx] || labels[idx] >= 0) continue;
       
+      // BFS flood fill
+      const stack = [idx];
       labels[idx] = numLabels;
-      pixels.push(idx);
+      const pixels = [idx];
       
-      const x = idx % width;
-      const y = Math.floor(idx / width);
-      if (x > 0) stack.push(idx - 1);
-      if (x < width - 1) stack.push(idx + 1);
-      if (y > 0) stack.push(idx - width);
-      if (y < height - 1) stack.push(idx + width);
+      while (stack.length) {
+        const cur = stack.pop();
+        const cx = cur % width;
+        const cy = (cur - cx) / width;
+        
+        if (cx > 0 && inkMask[cur - 1] && labels[cur - 1] < 0) {
+          labels[cur - 1] = numLabels;
+          stack.push(cur - 1);
+          pixels.push(cur - 1);
+        }
+        if (cx < width - 1 && inkMask[cur + 1] && labels[cur + 1] < 0) {
+          labels[cur + 1] = numLabels;
+          stack.push(cur + 1);
+          pixels.push(cur + 1);
+        }
+        if (cy > 0 && inkMask[cur - width] && labels[cur - width] < 0) {
+          labels[cur - width] = numLabels;
+          stack.push(cur - width);
+          pixels.push(cur - width);
+        }
+        if (cy < height - 1 && inkMask[cur + width] && labels[cur + width] < 0) {
+          labels[cur + width] = numLabels;
+          stack.push(cur + width);
+          pixels.push(cur + width);
+        }
+      }
+      
+      if (pixels.length < 8) { labels[idx] = -1; continue; }
+      
+      let minX = width, minY = height, maxX = 0, maxY = 0;
+      let sumX = 0, sumY = 0;
+      for (const i of pixels) {
+        const px = i % width;
+        const py = (i - px) / width;
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+        sumX += px; sumY += py;
+      }
+      
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      const area = w * h;
+      
+      comps.push({
+        label: numLabels,
+        count: pixels.length,
+        minX, minY, maxX, maxY, w, h, area,
+        cx: Math.round(sumX / pixels.length),
+        cy: Math.round(sumY / pixels.length),
+        fillRatio: pixels.length / area
+      });
+      
+      numLabels++;
     }
-    
-    if (pixels.length < 10) continue;
-    
-    let minX = width, minY = height, maxX = 0, maxY = 0;
-    let totalDark = 0;
-    
-    for (const idx of pixels) {
-      const x = idx % width;
-      const y = Math.floor(idx / width);
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      totalDark += bgMap[idx] - data[idx];
-    }
-    
-    const w = maxX - minX + 1;
-    const h = maxY - minY + 1;
-    const area = w * h;
-    
-    comps.push({
-      label: numLabels,
-      pixels,
-      minX, minY, maxX, maxY, w, h, area,
-      count: pixels.length,
-      fillRatio: pixels.length / area,
-      avgDark: totalDark / pixels.length
-    });
-    
-    numLabels++;
   }
   
-  // Step 4: Classify answer components
-  const toRemove = new Set();
+  // Classify: which components are ANSWERS?
+  // Answers in exam papers are:
+  // 1. Answer BOXES: small square filled regions (30-120px), in right half of page
+  //    - Matching section: D, A, B, C letters in boxes
+  // 2. Answer LINES: handwriting strokes on writing lines (lower part of page)
+  //    - Rewrite section: sentences written on lines
+  
+  const answerBoxes = [];
+  const answerStrokes = [];
   
   for (const comp of comps) {
-    // Skip noise
-    if (comp.count < 15) continue;
-    // Skip very large areas
-    if (comp.area > width * height * 0.2) continue;
-    // Skip very thin horizontal lines
-    if (comp.h <= 3 && comp.count > 200) continue;
+    const { count, w, h, area, fillRatio, cx, cy } = comp;
     
-    const { fillRatio, avgDark, count } = comp;
+    // Skip huge or tiny
+    if (area > width * height * 0.12) continue;
+    if (count < 15) continue;
     
-    // Printed dots: very low fill ratio
-    if (fillRatio < 0.1) continue;
-    // Solid fills: very high fill ratio
-    if (fillRatio > 0.8) continue;
-    // Must be dark enough
-    if (avgDark < 25) continue;
-    // Very small dense strokes that are just dots
-    if (fillRatio > 0.55 && count < 60) continue;
+    // Skip very thin long lines (printed rules)
+    if (h <= 4 && area > 200) continue;
     
-    toRemove.add(comp.label);
+    const aspect = w / h;
+    
+    // CANDIDATE 1: Answer box (matching section letters)
+    // Small square-ish filled region in right half of page
+    const isInRightHalf = cx > width * 0.4;
+    const isSquareish = aspect > 0.25 && aspect < 4.0;
+    const isSizedForBox = area > 300 && area < 12000;
+    const isSolidFill = fillRatio > 0.30 && fillRatio < 0.80;
+    
+    if (isInRightHalf && isSquareish && isSizedForBox && isSolidFill) {
+      // Make sure this box is relatively isolated (not a printed grid)
+      // Count how many other similar boxes are nearby
+      let nearbyCount = 0;
+      for (const other of comps) {
+        if (other.label === comp.label) continue;
+        const dx = Math.abs(cx - other.cx);
+        const dy = Math.abs(cy - other.cy);
+        if (dx < 60 && dy < 60) nearbyCount++;
+      }
+      // If many neighbors, it's likely a printed character grid - skip
+      if (nearbyCount <= 3) {
+        answerBoxes.push(comp);
+      }
+    }
+    
+    // CANDIDATE 2: Handwriting strokes on answer lines
+    // These are in the lower portion of the page (below 35% height)
+    // Characteristic: medium density, medium size
+    const isInLowerHalf = cy > height * 0.35;
+    const isDenselyFilled = fillRatio > 0.35;
+    const isMediumSize = count > 20 && area < 8000;
+    
+    if (isInLowerHalf && isDenselyFilled && isMediumSize) {
+      // Additional filter: skip things that look like dots or very small chars
+      // and skip things that are too large (likely printed characters)
+      if (fillRatio > 0.5 && count < 50) continue; // skip small dense dots
+      if (area > 5000 && fillRatio > 0.7) continue; // skip large dense blocks
+      answerStrokes.push(comp);
+    }
   }
   
-  // Step 5: Build and apply erasure mask
-  const eraseMask = Buffer.alloc(width * height);
+  // Build erasure mask
+  const eraseMask = Buffer.alloc(width * height).fill(0);
   
-  for (const comp of comps) {
-    if (!toRemove.has(comp.label)) continue;
-    
+  for (const box of answerBoxes) {
     const pad = 3;
-    const x1 = Math.max(0, comp.minX - pad);
-    const y1 = Math.max(0, comp.minY - pad);
-    const x2 = Math.min(width - 1, comp.maxX + pad);
-    const y2 = Math.min(height - 1, comp.maxY + pad);
-    
-    for (let y = y1; y <= y2; y++) {
-      for (let x = x1; x <= x2; x++) {
-        eraseMask[y * width + x] = 1;
+    const x1 = Math.max(0, box.minX - pad);
+    const y1 = Math.max(0, box.minY - pad);
+    const x2 = Math.min(width - 1, box.maxX + pad);
+    const y2 = Math.min(height - 1, box.maxY + pad);
+    for (let py = y1; py <= y2; py++) {
+      for (let px = x1; px <= x2; px++) {
+        eraseMask[py * width + px] = 1;
       }
     }
   }
   
-  // Apply
-  const paperColor = 252;
-  const result = Buffer.alloc(width * height);
-  for (let i = 0; i < width * height; i++) {
-    result[i] = eraseMask[i] ? paperColor : data[i];
+  for (const stroke of answerStrokes) {
+    const pad = 3;
+    const x1 = Math.max(0, stroke.minX - pad);
+    const y1 = Math.max(0, stroke.minY - pad);
+    const x2 = Math.min(width - 1, stroke.maxX + pad);
+    const y2 = Math.min(height - 1, stroke.maxY + pad);
+    for (let py = y1; py <= y2; py++) {
+      for (let px = x1; px <= x2; px++) {
+        eraseMask[py * width + px] = 1;
+      }
+    }
   }
   
-  // Output PNG
+  // Apply erasure
+  const result = Buffer.alloc(width * height);
+  for (let i = 0; i < width * height; i++) {
+    result[i] = eraseMask[i] ? 252 : gray[i];
+  }
+  
   const output = await sharp(result, {
     raw: { width, height, channels: 1 }
   })
