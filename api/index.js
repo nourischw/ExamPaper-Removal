@@ -29,11 +29,9 @@ module.exports = async function handler(req, res) {
         imageBuffer = Buffer.from(part.slice(contentStart, lastCrlf), 'binary');
         break;
       }
-    } else {
-      return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    if (!imageBuffer) return res.status(400).json({ error: 'No file data' });
+    if (!imageBuffer) return res.status(400).json({ error: 'No file uploaded' });
     
     const resultBuffer = await processExamPaper(imageBuffer);
     
@@ -53,7 +51,7 @@ async function processExamPaper(inputBuffer) {
   let width = meta.width;
   let height = meta.height;
   
-  const maxDim = 1800;
+  const maxDim = 2000;
   if (width > maxDim || height > maxDim) {
     const s = maxDim / Math.max(width, height);
     img.resize(Math.round(width * s), Math.round(height * s));
@@ -64,84 +62,71 @@ async function processExamPaper(inputBuffer) {
   
   const { data: gray } = await img.grayscale().raw().toBuffer({ resolveWithObject: true });
   
-  // Estimate paper background (brightest pixels in blocks)
-  const bgMap = Buffer.alloc(width * height);
-  const blockSize = 20;
+  // Step 1: Adaptive threshold to get binary image
+  // Black = 0, White = 1
+  const binary = Buffer.alloc(width * height);
+  const blockSize = 25;
   
   for (let by = 0; by < Math.ceil(height / blockSize); by++) {
     for (let bx = 0; bx < Math.ceil(width / blockSize); bx++) {
-      const pixels = [];
-      for (let dy = 0; dy < blockSize && by * blockSize + dy < height; dy++) {
-        for (let dx = 0; dx < blockSize && bx * blockSize + dx < width; dx++) {
-          pixels.push(gray[(by * blockSize + dy) * width + (bx * blockSize + dx)]);
+      const x0 = bx * blockSize;
+      const y0 = by * blockSize;
+      const x1 = Math.min(x0 + blockSize, width);
+      const y1 = Math.min(y0 + blockSize, height);
+      
+      let sum = 0, count = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          sum += gray[y * width + x];
+          count++;
         }
       }
-      pixels.sort((a, b) => a - b);
-      const bg = pixels[Math.floor(pixels.length * 0.05)] || 245;
-      for (let dy = 0; dy < blockSize && by * blockSize + dy < height; dy++) {
-        for (let dx = 0; dx < blockSize && bx * blockSize + dx < width; dx++) {
-          bgMap[(by * blockSize + dy) * width + (bx * blockSize + dx)] = bg;
+      const mean = sum / count;
+      const thresh = Math.max(60, mean - 8);
+      
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          binary[y * width + x] = gray[y * width + x] < thresh ? 1 : 0;
         }
       }
     }
   }
   
-  // Create ink mask: pixels significantly darker than local background
-  const inkMask = Buffer.alloc(width * height);
-  for (let i = 0; i < width * height; i++) {
-    inkMask[i] = (bgMap[i] - gray[i]) > 40 ? 1 : 0;
-  }
+  // Step 2: Find all rectangular contours
+  const contours = [];
+  const visited = Buffer.alloc(width * height).fill(0);
   
-  // Connected components on ink mask (4-connected)
-  // inkMask[i] = 1 means this pixel is ink
-  const labels = new Int32Array(width * height).fill(-1);
-  let numLabels = 0;
-  const comps = [];
-  
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
-      if (!inkMask[idx] || labels[idx] >= 0) continue;
+      if (!binary[idx] || visited[idx]) continue;
       
-      // BFS flood fill
-      const stack = [idx];
-      labels[idx] = numLabels;
-      const pixels = [idx];
+      // BFS to get connected region
+      const stack = [[x, y]];
+      const pixels = [];
+      visited[idx] = 1;
       
       while (stack.length) {
-        const cur = stack.pop();
-        const cx = cur % width;
-        const cy = (cur - cx) / width;
+        const [cx, cy] = stack.pop();
+        pixels.push([cx, cy]);
         
-        if (cx > 0 && inkMask[cur - 1] && labels[cur - 1] < 0) {
-          labels[cur - 1] = numLabels;
-          stack.push(cur - 1);
-          pixels.push(cur - 1);
-        }
-        if (cx < width - 1 && inkMask[cur + 1] && labels[cur + 1] < 0) {
-          labels[cur + 1] = numLabels;
-          stack.push(cur + 1);
-          pixels.push(cur + 1);
-        }
-        if (cy > 0 && inkMask[cur - width] && labels[cur - width] < 0) {
-          labels[cur - width] = numLabels;
-          stack.push(cur - width);
-          pixels.push(cur - width);
-        }
-        if (cy < height - 1 && inkMask[cur + width] && labels[cur + width] < 0) {
-          labels[cur + width] = numLabels;
-          stack.push(cur + width);
-          pixels.push(cur + width);
+        // Check 4 neighbors
+        const neighbors = [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]];
+        for (const [nx, ny] of neighbors) {
+          if (nx < 1 || nx >= width-1 || ny < 1 || ny >= height-1) continue;
+          const nidx = ny * width + nx;
+          if (binary[nidx] && !visited[nidx]) {
+            visited[nidx] = 1;
+            stack.push([nx, ny]);
+          }
         }
       }
       
-      if (pixels.length < 8) { labels[idx] = -1; continue; }
+      if (pixels.length < 20) continue;
       
       let minX = width, minY = height, maxX = 0, maxY = 0;
       let sumX = 0, sumY = 0;
-      for (const i of pixels) {
-        const px = i % width;
-        const py = (i - px) / width;
+      for (const [px, py] of pixels) {
         if (px < minX) minX = px;
         if (py < minY) minY = py;
         if (px > maxX) maxX = px;
@@ -149,114 +134,178 @@ async function processExamPaper(inputBuffer) {
         sumX += px; sumY += py;
       }
       
-      const w = maxX - minX + 1;
-      const h = maxY - minY + 1;
-      const area = w * h;
-      
-      comps.push({
-        label: numLabels,
-        count: pixels.length,
-        minX, minY, maxX, maxY, w, h, area,
+      contours.push({
+        pixels,
+        minX, minY, maxX, maxY,
+        w: maxX - minX + 1,
+        h: maxY - minY + 1,
         cx: Math.round(sumX / pixels.length),
         cy: Math.round(sumY / pixels.length),
-        fillRatio: pixels.length / area
+        count: pixels.length
       });
-      
-      numLabels++;
     }
   }
   
-  // Classify: which components are ANSWERS?
-  // Answers in exam papers are:
-  // 1. Answer BOXES: small square filled regions (30-120px), in right half of page
-  //    - Matching section: D, A, B, C letters in boxes
-  // 2. Answer LINES: handwriting strokes on writing lines (lower part of page)
-  //    - Rewrite section: sentences written on lines
+  // Step 3: Classify contours into ANSWER BOXES vs OTHER
+  // ANSWER BOXES: small rectangular contours that look like answer squares
+  // Strategy: 
+  // - Most answer boxes are on the RIGHT side of exam papers
+  // - They are small-medium size (not tiny specks, not huge areas)
+  // - They are roughly square or slightly tall/wide
+  // - They appear in groups (matching section has 4 boxes in a row)
   
-  const answerBoxes = [];
-  const answerStrokes = [];
+  const answerZones = []; // { x1, y1, x2, y2 }
   
-  for (const comp of comps) {
-    const { count, w, h, area, fillRatio, cx, cy } = comp;
+  for (const c of contours) {
+    const { w, h, minX, maxX, minY, maxY, cx, cy, count } = c;
+    const area = w * h;
     
-    // Skip huge or tiny
+    // Size filter: must be substantial but not huge
+    if (area < 400) continue;
     if (area > width * height * 0.12) continue;
-    if (count < 15) continue;
-    
-    // Skip very thin long lines (printed rules)
-    if (h <= 4 && area > 200) continue;
     
     const aspect = w / h;
     
-    // CANDIDATE 1: Answer box (matching section letters)
-    // Small square-ish filled region in right half of page
-    const isInRightHalf = cx > width * 0.4;
-    const isSquareish = aspect > 0.25 && aspect < 4.0;
-    const isSizedForBox = area > 300 && area < 12000;
-    const isSolidFill = fillRatio > 0.30 && fillRatio < 0.80;
+    // ANSWER BOX criteria:
+    // 1. In the RIGHT half of the page (where answer boxes usually are)
+    // 2. Roughly square-ish (aspect between 0.3 and 3.5)
+    // 3. Not extremely thin
+    if (cx < width * 0.38) continue;
+    if (aspect < 0.25 || aspect > 4.0) continue;
+    if (h <= 5) continue; // Very thin lines - skip
     
-    if (isInRightHalf && isSquareish && isSizedForBox && isSolidFill) {
-      // Make sure this box is relatively isolated (not a printed grid)
-      // Count how many other similar boxes are nearby
-      let nearbyCount = 0;
-      for (const other of comps) {
-        if (other.label === comp.label) continue;
-        const dx = Math.abs(cx - other.cx);
-        const dy = Math.abs(cy - other.cy);
-        if (dx < 60 && dy < 60) nearbyCount++;
-      }
-      // If many neighbors, it's likely a printed character grid - skip
-      if (nearbyCount <= 3) {
-        answerBoxes.push(comp);
+    // Check if this looks like a single answer box (not part of a large text block)
+    // Single boxes have high fill ratio (mostly filled)
+    // Text characters have lower fill ratio
+    const fillRatio = count / area;
+    if (fillRatio < 0.15) continue; // Too sparse - likely printed text
+    
+    // Additional: check if it's isolated (not part of a cluster of many close boxes)
+    // Count nearby contours of similar size
+    let similarNearby = 0;
+    for (const other of contours) {
+      if (other === c) continue;
+      const dx = Math.abs(cx - other.cx);
+      const dy = Math.abs(cy - other.cy);
+      // Same row? Similar y?
+      if (dx < w * 2 && dy < h * 2) similarNearby++;
+    }
+    
+    // If there are many similar contours nearby, they might be printed text
+    // BUT for matching answer boxes (4 boxes), they're all similar nearby
+    // So we need to allow groups of up to ~6
+    if (similarNearby > 8) continue;
+    
+    // This looks like an answer box - add to answer zones
+    const pad = 5;
+    answerZones.push({
+      x1: Math.max(0, minX - pad),
+      y1: Math.max(0, minY - pad),
+      x2: Math.min(width - 1, maxX + pad),
+      y2: Math.min(height - 1, maxY + pad)
+    });
+  }
+  
+  // Step 4: Also detect horizontal WRITING LINES (for sentence rewrite section)
+  // These are thin horizontal strips in the lower portion of the page
+  // We find them by looking for runs of dark pixels that form horizontal lines
+  
+  // Project dark pixels onto Y axis to find strong horizontal lines
+  const rowDensity = new Float32Array(height);
+  for (let y = 0; y < height; y++) {
+    let count = 0;
+    for (let x = 0; x < width; x++) {
+      if (binary[y * width + x]) count++;
+    }
+    rowDensity[y] = count;
+  }
+  
+  // Find peaks in row density - these are horizontal lines
+  // A writing line creates a peak in density
+  const lineRows = [];
+  const lineHeight = 6; // Expected height of a writing line in pixels
+  
+  for (let y = lineHeight; y < height - lineHeight; y++) {
+    // Check if this row is a "peak" in density
+    // It's a line if it's darker than surroundings
+    const localMax = rowDensity[y];
+    const threshold = 15; // Minimum dark pixels to count as a line
+    
+    if (localMax < threshold) continue;
+    
+    // Check if it's a local maximum
+    let isLocalMax = true;
+    for (let dy = -lineHeight; dy <= lineHeight; dy++) {
+      if (dy === 0) continue;
+      if (rowDensity[y + dy] >= localMax) {
+        isLocalMax = false;
+        break;
       }
     }
     
-    // CANDIDATE 2: Handwriting strokes on answer lines
-    // These are in the lower portion of the page (below 35% height)
-    // Characteristic: medium density, medium size
-    const isInLowerHalf = cy > height * 0.35;
-    const isDenselyFilled = fillRatio > 0.35;
-    const isMediumSize = count > 20 && area < 8000;
-    
-    if (isInLowerHalf && isDenselyFilled && isMediumSize) {
-      // Additional filter: skip things that look like dots or very small chars
-      // and skip things that are too large (likely printed characters)
-      if (fillRatio > 0.5 && count < 50) continue; // skip small dense dots
-      if (area > 5000 && fillRatio > 0.7) continue; // skip large dense blocks
-      answerStrokes.push(comp);
+    if (isLocalMax) {
+      lineRows.push(y);
     }
   }
   
-  // Build erasure mask
+  // Group consecutive line rows into line regions
+  const writingLines = [];
+  if (lineRows.length > 0) {
+    let lineStart = lineRows[0];
+    let prevRow = lineRows[0];
+    
+    for (let i = 1; i <= lineRows.length; i++) {
+      const row = lineRows[i];
+      if (row === undefined || row - prevRow > lineHeight * 1.5) {
+        // End of a line region
+        const lineY = Math.round((lineStart + prevRow) / 2);
+        const lineBottom = prevRow;
+        
+        // The writing area is ABOVE the line (the space where students write)
+        // But we need to find a region that's clearly for writing
+        // Typically the line is surrounded by blank space above
+        
+        // Add the line itself + a bit above as the answer zone
+        const zoneTop = Math.max(0, lineStart - 40); // 40px above line for writing space
+        const zoneBottom = Math.min(height - 1, lineBottom + 2);
+        
+        // Only add if this region is in the lower portion of the page (answer area)
+        if (lineY > height * 0.35) {
+          writingLines.push({ y1: zoneTop, y2: zoneBottom, lineY });
+        }
+        
+        if (row !== undefined) lineStart = row;
+      }
+      if (row !== undefined) prevRow = row;
+    }
+  }
+  
+  // Step 5: Build erasure mask
   const eraseMask = Buffer.alloc(width * height).fill(0);
   
-  for (const box of answerBoxes) {
-    const pad = 3;
-    const x1 = Math.max(0, box.minX - pad);
-    const y1 = Math.max(0, box.minY - pad);
-    const x2 = Math.min(width - 1, box.maxX + pad);
-    const y2 = Math.min(height - 1, box.maxY + pad);
-    for (let py = y1; py <= y2; py++) {
-      for (let px = x1; px <= x2; px++) {
-        eraseMask[py * width + px] = 1;
+  // Erase answer boxes
+  for (const zone of answerZones) {
+    for (let y = zone.y1; y <= zone.y2; y++) {
+      for (let x = zone.x1; x <= zone.x2; x++) {
+        eraseMask[y * width + x] = 1;
       }
     }
   }
   
-  for (const stroke of answerStrokes) {
-    const pad = 3;
-    const x1 = Math.max(0, stroke.minX - pad);
-    const y1 = Math.max(0, stroke.minY - pad);
-    const x2 = Math.min(width - 1, stroke.maxX + pad);
-    const y2 = Math.min(height - 1, stroke.maxY + pad);
-    for (let py = y1; py <= y2; py++) {
-      for (let px = x1; px <= x2; px++) {
-        eraseMask[py * width + px] = 1;
+  // Erase writing lines (fill the entire line strip)
+  for (const ln of writingLines) {
+    for (let y = ln.y1; y <= ln.y2; y++) {
+      for (let x = 0; x < width; x++) {
+        // Only erase if there's some content there (not pure background)
+        // This prevents erasing blank space unnecessarily
+        if (binary[y * width + x]) {
+          eraseMask[y * width + x] = 1;
+        }
       }
     }
   }
   
-  // Apply erasure
+  // Step 6: Apply erasure - draw white over masked areas
   const result = Buffer.alloc(width * height);
   for (let i = 0; i < width * height; i++) {
     result[i] = eraseMask[i] ? 252 : gray[i];
